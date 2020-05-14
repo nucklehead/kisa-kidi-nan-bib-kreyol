@@ -5,7 +5,6 @@ from pymongo import IndexModel
 
 class Migration(BaseMigration):
     def upgrade(self):
-        self.db['odyo_bib_kreyol'].drop()
         self.db.create_collection('odyo_bib_kreyol')
         self.db.odyo_bib_kreyol.create_indexes([IndexModel(
             [

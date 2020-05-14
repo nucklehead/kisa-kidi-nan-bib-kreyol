@@ -16,7 +16,7 @@ configure_mongo(app)
 
 logger = logging.getLogger('werkzeug')
 
-with open('spider.bible_id.json', 'r') as bib:
+with open('1957-bible.json', 'r') as bib:
     bib_json = json.load(bib)[0]
 
 with open('1957-fullaudio-bible-full-name.json', 'r') as bib:
@@ -41,8 +41,13 @@ class Chapit(Resource):
 class Vese(Resource):
     def get(self, liv, chapit):
         vese = bib_json.get(liv, {}).get(chapit, {})
-        vese = OrderedDict(sorted(vese.items(), key=lambda item: int(item[0].split('-')[0])))
-        return {f'Vese {vese}' if 'antèt' in vese else 'Tit': teks for vese, teks in vese.items()}
+        vese['0'] = f'{liv} chapit {int(chapit)}.'
+        vese = OrderedDict(sorted(vese.items(), key=lambda item: float(item[0])))
+        nimewo_tit = iter(range(len(vese)))
+        return {
+            f'Tit {next(nimewo_tit) + 1}' if '.5' in vese
+            else 'Chapit' if vese == '0'
+            else f'Vese {vese}': teks for vese, teks in vese.items()}
 
 
 @api.route('/api/<liv>/<chapit>/odyo.mp3')
@@ -71,9 +76,10 @@ wave_list_fields = api.model('WaveList', {
 class Anrejistre(Resource):
     @api.marshal_with(wave_fields)
     def get(self, liv, chapit, idantifikasyon):
-        wavves = list(MONGO_DB.db.odyo_bib_kreyol.find(
-            {'liv': liv, 'chapit': chapit, 'idantifikasyon': idantifikasyon}
-        ))
+        query = {'liv': liv, 'chapit': chapit}
+        if idantifikasyon != os.environ.get("ADMIN_UID", default=''):
+            query['idantifikasyon'] = idantifikasyon
+        wavves = list(MONGO_DB.db.odyo_bib_kreyol.find(query))
         return [wave['wave'] for wave in wavves]
 
     @api.doc(body=wave_list_fields)
@@ -93,7 +99,16 @@ class Anrejistre(Resource):
 
 
 enfo_itilizate = api.model('Kont', {
-    'uid': fields.String,
+  "uid": fields.String,
+  "name": fields.String,
+  "granted_scopes": fields.String,
+  "id": fields.String,
+  "verified_email": fields.Boolean,
+  "given_name": fields.String,
+  "locale": fields.String,
+  "family_name": fields.String,
+  "email": fields.String,
+  "picture": fields.String,
 })
 
 
@@ -101,8 +116,23 @@ enfo_itilizate = api.model('Kont', {
 class Antre(Resource):
     @api.doc(body=enfo_itilizate)
     def post(self):
-        assert request.json['uid'] == os.environ.get("ADMIN_UID", default='')
-        return {'token': request.json['uid']}
+        enfo_itilizate = request.json
+        enfo_itilizate['admin'] = request.json['uid'] == os.environ.get("ADMIN_UID", default='')
+        MONGO_DB.db.itilizate.replace_one({'uid': enfo_itilizate['uid']}, enfo_itilizate, upsert=True)
+        return {
+            'token': request.json['uid'],
+            'admin': enfo_itilizate['admin']
+        }
+
+
+@api.route('/api/itilizate/<adminUid>')
+@api.doc(params={'adminUid': 'Idantifikasyon pou administrate a'})
+class Itilizate(Resource):
+    @api.marshal_with(enfo_itilizate)
+    def get(self, adminUid):
+        if adminUid != os.environ.get("ADMIN_UID", default=''):
+            return []
+        return list(MONGO_DB.db.itilizate.find())
 
 
 if __name__ == '__main__':
