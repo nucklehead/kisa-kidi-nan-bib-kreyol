@@ -76,9 +76,7 @@ wave_list_fields = api.model('WaveList', {
 class Anrejistre(Resource):
     @api.marshal_with(wave_fields)
     def get(self, liv, chapit, idantifikasyon):
-        query = {'liv': liv, 'chapit': chapit}
-        if idantifikasyon != os.environ.get("ADMIN_UID", default=''):
-            query['idantifikasyon'] = idantifikasyon
+        query = {'liv': liv, 'chapit': chapit, 'idantifikasyon': idantifikasyon}
         wavves = list(MONGO_DB.db.odyo_bib_kreyol.find(query))
         return [wave['wave'] for wave in wavves]
 
@@ -116,12 +114,15 @@ enfo_itilizate = api.model('Kont', {
 class Antre(Resource):
     @api.doc(body=enfo_itilizate)
     def post(self):
-        enfo_itilizate = request.json
-        enfo_itilizate['admin'] = request.json['uid'] == os.environ.get("ADMIN_UID", default='')
-        MONGO_DB.db.itilizate.replace_one({'uid': enfo_itilizate['uid']}, enfo_itilizate, upsert=True)
+        enfo = request.json
+        enfo['admin'] = request.json['uid'] == os.environ.get("ADMIN_UID", default='')
+        MONGO_DB.db.itilizate.update_one({'uid': enfo['uid']}, {'$set': enfo}, upsert=True)
+        result = MONGO_DB.db.itilizate.find_one({'uid': enfo['uid']})
+
         return {
             'token': request.json['uid'],
-            'admin': enfo_itilizate['admin']
+            'admin': enfo['admin'],
+            'latestFeature': result.get('latestFeature', 0)
         }
 
 
@@ -135,6 +136,21 @@ class Itilizate(Resource):
         return list(MONGO_DB.db.itilizate.find())
 
 
+dat_fonksyon = api.model('Dat', {
+  "date": fields.Integer,
+})
+
+
+@api.route('/api/kont/<token>')
+@api.doc(params={'token': 'Idantifikasyon pou itilizate a'})
+class Kont(Resource):
+    @api.doc(body=dat_fonksyon)
+    def post(self, token):
+        dat = request.json
+        MONGO_DB.db.itilizate.update_one({'uid': token}, {'$set': {'latestFeature': dat['date']}})
+
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", default=8080))
     app.run(host='0.0.0.0', port=port)
+
