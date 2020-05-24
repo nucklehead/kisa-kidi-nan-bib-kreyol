@@ -5,7 +5,7 @@ from collections import OrderedDict
 from flask import Flask, redirect, request
 from flask_restplus import Resource, Api, fields
 from flask_cors import CORS
-from pymongo import ReplaceOne
+from pymongo import UpdateOne
 from db.config import configure_mongo, MONGO_DB
 
 app = Flask(__name__)
@@ -87,9 +87,9 @@ class Anrejistre(Resource):
         logger.info(chapit)
         logger.info(waves)
         vese_yo = [
-            ReplaceOne(
+            UpdateOne(
                 {'liv': liv, 'chapit': chapit, 'vese': index, 'idantifikasyon': idantifikasyon},
-                {'liv': liv, 'chapit': chapit, 'vese': index, 'idantifikasyon': idantifikasyon, 'wave': wave},
+                {'$set': {'wave': wave}},
                 upsert=True
             ) for index, wave in enumerate(waves)
         ]
